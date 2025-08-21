@@ -4,8 +4,8 @@ import ChatPanel from "@/components/ChatPanel";
 import { useState } from "react";
 import dynamic from "next/dynamic";
 
-// Dynamically import SideMapView with no SSR to avoid Leaflet SSR issues
-const SideMapView = dynamic(() => import("@/components/SideMapView"), {
+// Dynamically import MapboxMapView (no SSR needed for Mapbox)
+const MapboxMapView = dynamic(() => import("@/components/MapboxMapView"), {
   ssr: false,
   loading: () => (
     <div className="h-full w-full bg-gray-100 flex items-center justify-center">
@@ -79,6 +79,7 @@ export default function HomePage() {
         userLocation: {},
       },
     };
+    console.log("HomePage: Setting test map data:", testData);
     setMapData(testData);
   };
 
@@ -91,7 +92,7 @@ export default function HomePage() {
 
       {/* Right Side - Map */}
       <div className="w-1/2 bg-white border-l border-gray-200">
-        <SideMapView mapData={mapData} />
+        <MapboxMapView mapData={mapData} />
       </div>
 
       {/* Test button for map - positioned over chat panel */}

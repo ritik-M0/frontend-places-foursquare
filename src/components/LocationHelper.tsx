@@ -2,7 +2,7 @@
 import { useState } from "react";
 
 export default function LocationHelper() {
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<{ response: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
