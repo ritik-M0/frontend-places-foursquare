@@ -1,103 +1,106 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import ChatPanel from "@/components/ChatPanel";
+import { useState } from "react";
+import dynamic from "next/dynamic";
+
+// Dynamically import SideMapView with no SSR to avoid Leaflet SSR issues
+const SideMapView = dynamic(() => import("@/components/SideMapView"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-gray-100 flex items-center justify-center">
+      <div className="text-gray-500">Loading map...</div>
+    </div>
+  ),
+});
+
+interface MapData {
+  center: { lat: number; lng: number };
+  bounds: { north: number; south: number; east: number; west: number };
+  layers: {
+    places: Array<{
+      id: string;
+      type: string;
+      coordinates: [number, number];
+      properties: {
+        name: string;
+        address: string;
+        category: string;
+        relevance: number;
+      };
+    }>;
+    events: unknown[];
+    weather: unknown[];
+    userLocation: Record<string, unknown>;
+  };
+}
+
+export default function HomePage() {
+  const [mapData, setMapData] = useState<MapData | null>(null);
+
+  const handleMapData = (data: MapData | undefined) => {
+    if (data) {
+      setMapData(data);
+    }
+  };
+
+  // Test function to manually show map
+  const showTestMap = () => {
+    const testData = {
+      center: { lat: 28.4595, lng: 77.0266 },
+      bounds: { north: 28.47, south: 28.45, east: 77.03, west: 77.02 },
+      layers: {
+        places: [
+          {
+            id: "test-1",
+            type: "place",
+            coordinates: [77.026578, 28.459557] as [number, number],
+            properties: {
+              name: "Blue Tokai Coffee Roasters",
+              address: "Sadar Bazar Road, Jacobpura, Sector 12, Gurugram",
+              category: "Fast Food, Restaurant",
+              relevance: 1.0,
+            },
+          },
+          {
+            id: "test-2",
+            type: "place",
+            coordinates: [77.02657, 28.45939] as [number, number],
+            properties: {
+              name: "Barbeque Nation",
+              address: "Sadar Bazar Road, Roshanpura, Gurugram",
+              category: "Barbecue, Restaurant",
+              relevance: 1.0,
+            },
+          },
+        ],
+        events: [],
+        weather: [],
+        userLocation: {},
+      },
+    };
+    setMapData(testData);
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="h-screen bg-gray-50 flex">
+      {/* Left Side - Chat Panel */}
+      <div className="w-1/2 bg-slate-900 flex flex-col">
+        <ChatPanel onMapData={handleMapData} />
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      {/* Right Side - Map */}
+      <div className="w-1/2 bg-white border-l border-gray-200">
+        <SideMapView mapData={mapData} />
+      </div>
+
+      {/* Test button for map - positioned over chat panel */}
+      <button
+        onClick={showTestMap}
+        className="fixed top-4 left-4 bg-blue-600 text-white px-3 py-1.5 rounded text-xs hover:bg-blue-700 transition-colors z-40"
+      >
+        Test Map
+      </button>
     </div>
   );
 }
