@@ -1,6 +1,6 @@
 "use client";
 
-import ChatPanel from "@/components/ChatPanel";
+import RetailPanel from "@/components/RetailPanel";
 import { useState } from "react";
 import dynamic from "next/dynamic";
 
@@ -29,7 +29,15 @@ interface MapData {
         relevance: number;
         businessType?: "recommendation" | "competitor";
         neighborhood?: string;
-        footTraffic?: string;
+        // Enhanced retail-specific properties
+        retail_score?: number;
+        foot_traffic?: string;
+        market_potential?: number;
+        competition_density?: number;
+        demographics_match?: number;
+        accessibility_score?: number;
+        parking_availability?: string;
+        rent_estimate?: string;
       };
     }>;
     events: unknown[];
@@ -46,7 +54,7 @@ interface MapData {
   };
 }
 
-export default function HomePage() {
+export default function RetailAgentPage() {
   const [mapData, setMapData] = useState<MapData | null>(null);
 
   const handleMapData = (data: MapData | undefined) => {
@@ -56,10 +64,10 @@ export default function HomePage() {
   };
 
   return (
-    <div className="h-[calc(100vh-60px)] bg-gray-50 flex">
-      {/* Left Side - Chat Panel */}
+    <div className="h-screen bg-gray-50 flex">
+      {/* Left Side - Retail Panel */}
       <div className="w-1/2 bg-slate-900 flex flex-col">
-        <ChatPanel onMapData={handleMapData} />
+        <RetailPanel onMapData={handleMapData} />
       </div>
 
       {/* Right Side - Map */}

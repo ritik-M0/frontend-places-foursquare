@@ -1,6 +1,6 @@
 "use client";
 
-import ChatPanel from "@/components/ChatPanel";
+import RealEstatePanel from "@/components/RealEstatePanel";
 import { useState } from "react";
 import dynamic from "next/dynamic";
 
@@ -29,7 +29,21 @@ interface MapData {
         relevance: number;
         businessType?: "recommendation" | "competitor";
         neighborhood?: string;
-        footTraffic?: string;
+        // Enhanced real estate-specific properties
+        property_type?: string;
+        price_range?: string;
+        investment_potential?: number;
+        market_trend?: string;
+        roi_estimate?: string;
+        cap_rate?: number;
+        property_size?: string;
+        zoning?: string;
+        walkability_score?: number;
+        transit_access?: string;
+        school_district?: string;
+        crime_rate?: string;
+        appreciation_rate?: number;
+        rental_yield?: number;
       };
     }>;
     events: unknown[];
@@ -37,7 +51,7 @@ interface MapData {
     userLocation: Record<string, unknown>;
   };
   metadata?: {
-    analysisType: "business_location" | "general_search";
+    analysisType: "business_location" | "general_search" | "real_estate";
     neighborhoods?: Array<{
       name: string;
       description: string;
@@ -46,20 +60,28 @@ interface MapData {
   };
 }
 
-export default function HomePage() {
+export default function RealEstateAgentPage() {
   const [mapData, setMapData] = useState<MapData | null>(null);
 
   const handleMapData = (data: MapData | undefined) => {
     if (data) {
-      setMapData(data);
+      // Set analysis type for real estate
+      const enhancedData = {
+        ...data,
+        metadata: {
+          ...data.metadata,
+          analysisType: "real_estate" as const,
+        },
+      };
+      setMapData(enhancedData);
     }
   };
 
   return (
     <div className="h-[calc(100vh-60px)] bg-gray-50 flex">
-      {/* Left Side - Chat Panel */}
+      {/* Left Side - Real Estate Panel */}
       <div className="w-1/2 bg-slate-900 flex flex-col">
-        <ChatPanel onMapData={handleMapData} />
+        <RealEstatePanel onMapData={handleMapData} />
       </div>
 
       {/* Right Side - Map */}

@@ -1,48 +1,47 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 
-type Msg = { role: "user" | "assistant"; text: string; at: string };
+type Message = {
+  role: "user" | "assistant";
+  text: string;
+  at: string;
+};
 
-interface StreamEvent {
-  type: "start" | "content" | "done" | "error" | "map_data";
-  content?: string;
-  error?: string;
-  timestamp?: string;
-  sessionId?: string;
-  mapData?: {
-    center: { lat: number; lng: number };
-    bounds: { north: number; south: number; east: number; west: number };
-    layers: {
-      places: Array<{
-        id: string;
-        type: string;
-        coordinates: [number, number];
-        properties: {
-          name: string;
-          address: string;
-          category: string;
-          relevance: number;
-        };
-      }>;
-      events: unknown[];
-      weather: unknown[];
-      userLocation: Record<string, unknown>;
-    };
+interface Place {
+  id: string;
+  type: string;
+  coordinates: [number, number];
+  properties: {
+    name: string;
+    address: string;
+    category: string;
+    relevance: number;
+    businessType?: "recommendation" | "competitor";
+    neighborhood?: string;
+  };
+}
+
+interface MapData {
+  center: { lat: number; lng: number };
+  bounds?: { north: number; south: number; east: number; west: number };
+  layers: {
+    places: Place[];
+    events: unknown[];
+    weather: unknown[];
+    userLocation: Record<string, unknown>;
   };
 }
 
 interface ChatPanelProps {
-  onMapData: (data: StreamEvent["mapData"]) => void;
+  onMapData: (data: MapData) => void;
 }
 
 export default function ChatPanel({ onMapData }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string>("");
-  const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setSessionId(crypto.randomUUID());
@@ -52,168 +51,51 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Function to handle streaming response
-  async function sendWithStreaming(message: string) {
-    setBusy(true);
-    setIsStreaming(true);
+  // Transform backend Place to frontend Place format
+  const transformFeatureToPlace = (
+    place: {
+      id: string;
+      type: string;
+      coordinates: [number, number];
+      properties: Record<string, unknown>;
+    },
+    index: number
+  ): Place => ({
+    id: place.id || `place_${index}`,
+    type: place.type || "point",
+    coordinates: place.coordinates,
+    properties: {
+      name: (place.properties?.name as string) || "Unknown Location",
+      address: (place.properties?.address as string) || "",
+      category: (place.properties?.category as string) || "general",
+      relevance: (place.properties?.relevance as number) || 1.0,
+      businessType:
+        (place.properties?.businessType as "recommendation" | "competitor") ||
+        "recommendation",
+      neighborhood: (place.properties?.neighborhood as string) || "",
+    },
+  });
 
-    // Add user message
-    setMessages((m) => [
-      ...m,
-      { role: "user", text: message, at: new Date().toISOString() },
-    ]);
+  // Create map message summary
+  const createMapMessage = (
+    locationCount: number,
+    metadata?: { executionTime?: number; confidence?: number }
+  ) => {
+    const count = locationCount;
+    const plural = count > 1 ? "s" : "";
+    const time = metadata?.executionTime || 0;
+    const confidence = Math.round((metadata?.confidence || 0) * 100);
 
-    // Create abort controller for this request
-    abortControllerRef.current = new AbortController();
+    return (
+      `\n\n🏙️ Urban Planning Analysis Complete!\n` +
+      `📍 Found ${count} verified location${plural} with coordinates\n` +
+      `🗺️ View interactive map with detailed insights →\n` +
+      `⚡ Processing: ${time}ms | Confidence: ${confidence}%`
+    );
+  };
 
-    try {
-      const response = await fetch("/api/places/chat/stream", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message, sessionId }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
-        throw new Error("No response body reader available");
-      }
-
-      let assistantMessageIndex = -1;
-      let accumulatedContent = "";
-
-      // Add initial assistant message placeholder
-      setMessages((m) => {
-        const newMessages = [
-          ...m,
-          {
-            role: "assistant" as const,
-            text: "",
-            at: new Date().toISOString(),
-          },
-        ];
-        assistantMessageIndex = newMessages.length - 1;
-        return newMessages;
-      });
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const eventData: StreamEvent = JSON.parse(line.slice(6));
-
-                switch (eventData.type) {
-                  case "start":
-                    console.log("Stream started:", eventData);
-                    break;
-
-                  case "content":
-                    if (eventData.content) {
-                      accumulatedContent += eventData.content;
-                      // Update the assistant message with accumulated content
-                      setMessages((m) => {
-                        const updatedMessages = [...m];
-                        if (assistantMessageIndex >= 0) {
-                          updatedMessages[assistantMessageIndex] = {
-                            ...updatedMessages[assistantMessageIndex],
-                            text: accumulatedContent,
-                            at: eventData.timestamp || new Date().toISOString(),
-                          };
-                        }
-                        return updatedMessages;
-                      });
-                    }
-                    break;
-
-                  case "map_data":
-                    if (eventData.mapData) {
-                      console.log("Map data received:", eventData.mapData);
-                      // Show the map in side panel
-                      onMapData(eventData.mapData);
-
-                      // Add a message indicating places were found
-                      setMessages((m) => {
-                        const updatedMessages = [...m];
-                        if (assistantMessageIndex >= 0 && eventData.mapData) {
-                          updatedMessages[assistantMessageIndex] = {
-                            ...updatedMessages[assistantMessageIndex],
-                            text: `� Found ${eventData.mapData.layers.places.length} locations (check the map panel)`,
-                            at: eventData.timestamp || new Date().toISOString(),
-                          };
-                        }
-                        return updatedMessages;
-                      });
-                    }
-                    break;
-
-                  case "done":
-                    console.log("Stream completed:", eventData);
-                    setIsStreaming(false);
-                    break;
-
-                  case "error":
-                    console.error("Stream error:", eventData.error);
-                    setMessages((m) => {
-                      const updatedMessages = [...m];
-                      if (assistantMessageIndex >= 0) {
-                        updatedMessages[assistantMessageIndex] = {
-                          ...updatedMessages[assistantMessageIndex],
-                          text: `Error: ${eventData.error}`,
-                          at: eventData.timestamp || new Date().toISOString(),
-                        };
-                      }
-                      return updatedMessages;
-                    });
-                    setIsStreaming(false);
-                    break;
-                }
-              } catch (parseError) {
-                console.warn("Failed to parse SSE data:", line, parseError);
-              }
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === "AbortError") {
-        console.log("Request was aborted");
-        return;
-      }
-
-      console.error("Streaming error:", error);
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          text: `Error: ${String(error)}`,
-          at: new Date().toISOString(),
-        },
-      ]);
-    } finally {
-      setBusy(false);
-      setIsStreaming(false);
-      abortControllerRef.current = null;
-    }
-  }
-
-  // Fallback to regular non-streaming request
-  async function sendRegular(message: string) {
+  // Urban planning request
+  async function sendMessage(message: string) {
     setBusy(true);
     setMessages((m) => [
       ...m,
@@ -221,35 +103,77 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
     ]);
 
     try {
-      const res = await fetch("/api/places/chat", {
+      const res = await fetch("/api/places/urban-planning", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message, sessionId }),
+        body: JSON.stringify({
+          message,
+          sessionId,
+          responsePreference: "auto",
+        }),
       });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
       const json = await res.json();
+      console.log("=== FULL BACKEND RESPONSE ===");
+      console.log(JSON.stringify(json, null, 2));
+      console.log("=== END RESPONSE ===");
 
-      // Check if response contains map data
-      if (
-        json?.response &&
-        typeof json.response === "object" &&
-        json.response.center
-      ) {
-        onMapData(json.response);
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            text: `🗺️ Map opened with ${json.response.layers.places.length} locations`,
-            at: json?.timestamp ?? new Date().toISOString(),
-          },
-        ]);
+      if (json?.success) {
+        // Handle map data if present - ALWAYS show if mapData exists
+        if (json.mapData?.places?.length > 0) {
+          const transformedMapData: MapData = {
+            center: json.mapData.center,
+            bounds: json.mapData.bounds,
+            layers: {
+              places: json.mapData.places.map(transformFeatureToPlace),
+              events: [],
+              weather: [],
+              userLocation: {},
+            },
+          };
+
+          onMapData(transformedMapData);
+          console.log("=== TRANSFORMED MAP DATA SENT TO MAP ===");
+          console.log(JSON.stringify(transformedMapData, null, 2));
+          console.log("=== END TRANSFORMED DATA ===");
+
+          const mapMessage = createMapMessage(
+            json.mapData.places.length,
+            json.metadata
+          );
+          setMessages((m) => [
+            ...m,
+            {
+              role: "assistant",
+              text: `${json.response}${mapMessage}`,
+              at: json.timestamp,
+            },
+          ]);
+        } else {
+          // Text-only response
+          setMessages((m) => [
+            ...m,
+            {
+              role: "assistant",
+              text: json.response || "Analysis completed.",
+              at: json.timestamp,
+            },
+          ]);
+        }
       } else {
+        // Handle error responses
+        const errorText =
+          json?.response || json?.error || "Unknown error occurred";
         setMessages((m) => [
           ...m,
           {
             role: "assistant",
-            text: json?.response ?? String(json),
-            at: json?.timestamp ?? new Date().toISOString(),
+            text: `Error: ${errorText}`,
+            at: json?.timestamp || new Date().toISOString(),
           },
         ]);
       }
@@ -258,7 +182,7 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
         ...m,
         {
           role: "assistant",
-          text: `Error: ${String(e)}`,
+          text: `Connection Error: ${String(e)}`,
           at: new Date().toISOString(),
         },
       ]);
@@ -267,17 +191,29 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
     }
   }
 
-  async function send(useStreaming = true) {
+  // Assistant avatar component
+  const AssistantAvatar = () => (
+    <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+      <svg
+        className="w-4 h-4 text-white"
+        fill="currentColor"
+        viewBox="0 0 20 20"
+      >
+        <path
+          fillRule="evenodd"
+          d="M10 2C5.58 2 2 5.58 2 10c0 1.4.36 2.71.99 3.86L2 18l4.14-.99C7.29 17.64 8.6 18 10 18c4.42 0 8-3.58 8-8s-3.58-8-8-8z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </div>
+  );
+
+  async function send() {
     const message = input.trim();
     if (!message) return;
 
     setInput("");
-
-    if (useStreaming) {
-      await sendWithStreaming(message);
-    } else {
-      await sendRegular(message);
-    }
+    await sendMessage(message);
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -287,55 +223,23 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
     }
   };
 
-  const stopStream = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setBusy(false);
-      setIsStreaming(false);
-    }
-  };
-
   return (
     <div className="flex flex-col h-full bg-slate-900">
       {/* Chat Header */}
       <div className="flex items-center justify-between p-4 border-b border-slate-700">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-white"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 2C5.58 2 2 5.58 2 10c0 1.4.36 2.71.99 3.86L2 18l4.14-.99C7.29 17.64 8.6 18 10 18c4.42 0 8-3.58 8-8s-3.58-8-8-8z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
+          <AssistantAvatar />
           <div>
-            <h3 className="text-white font-medium">Tom Tom Agent</h3>
+            <h3 className="text-white font-medium">Urban Planning Assistant</h3>
             <p className="text-xs text-slate-400">
-              {isStreaming ? "Streaming..." : busy ? "Analyzing..." : "Online"}
+              {busy ? "Analyzing..." : "Online"}
             </p>
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          {isStreaming && (
-            <button
-              onClick={stopStream}
-              className="text-xs bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition-colors"
-            >
-              Stop
-            </button>
-          )}
           <div
             className={`w-2 h-2 rounded-full animate-pulse ${
-              isStreaming
-                ? "bg-blue-500"
-                : busy
-                ? "bg-yellow-500"
-                : "bg-green-500"
+              busy ? "bg-yellow-500" : "bg-green-500"
             }`}
           ></div>
         </div>
@@ -360,10 +264,12 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
                 />
               </svg>
             </div>
-            <p className="text-slate-300 font-medium">Ask me anything</p>
+            <p className="text-slate-300 font-medium">
+              Ask about urban planning
+            </p>
             <p className="text-slate-500 text-sm mt-1">
-              I can help you find places, restaurants and locations. Try asking
-              &ldquo;show me restaurants on a map&rdquo;!
+              I can help with smart city analysis, zoning, and urban development
+              insights.
             </p>
           </div>
         ) : (
@@ -375,21 +281,7 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
                   m.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
-                {m.role === "assistant" && (
-                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                    <svg
-                      className="w-4 h-4 text-white"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 2C5.58 2 2 5.58 2 10c0 1.4.36 2.71.99 3.86L2 18l4.14-.99C7.29 17.64 8.6 18 10 18c4.42 0 8-3.58 8-8s-3.58-8-8-8z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                )}
+                {m.role === "assistant" && <AssistantAvatar />}
 
                 <div
                   className={`max-w-[75%] ${
@@ -400,11 +292,6 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
                 >
                   <div className="whitespace-pre-wrap text-sm leading-relaxed">
                     {m.text}
-                    {isStreaming &&
-                      i === messages.length - 1 &&
-                      m.role === "assistant" && (
-                        <span className="inline-block w-2 h-4 bg-blue-400 ml-1 animate-pulse"></span>
-                      )}
                   </div>
                   {m.role === "assistant" && (
                     <div className="text-xs text-slate-400 mt-2">
@@ -418,21 +305,9 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
               </div>
             ))}
 
-            {busy && !isStreaming && (
+            {busy && (
               <div className="flex justify-start">
-                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <svg
-                    className="w-4 h-4 text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 2C5.58 2 2 5.58 2 10c0 1.4.36 2.71.99 3.86L2 18l4.14-.99C7.29 17.64 8.6 18 10 18c4.42 0 8-3.58 8-8s-3.58-8-8-8z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
+                <AssistantAvatar />
                 <div className="bg-slate-800 border border-slate-700 px-4 py-3 rounded-2xl rounded-bl-md">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
@@ -461,36 +336,15 @@ export default function ChatPanel({ onMapData }: ChatPanelProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Ask me anything..."
+            placeholder="Ask about urban planning..."
             disabled={busy}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
-            {/* Toggle between streaming and regular mode */}
             <button
-              onClick={() => send(false)}
+              onClick={send}
               disabled={busy || !input.trim()}
               className="p-2 text-slate-400 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Send without streaming"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </button>
-            <button
-              onClick={() => send(true)}
-              disabled={busy || !input.trim()}
-              className="p-2 text-slate-400 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Send with streaming"
+              title="Send message"
             >
               {busy ? (
                 <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Navigation from "@/components/Navigation";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TomTom Agent - Location Intelligence Platform",
-  description: "AI-powered location services and place discovery platform",
+  title: "Retail & Real Estate Intelligence Platform",
+  description:
+    "AI-powered location intelligence for retail and real estate professionals",
 };
 
 export default function RootLayout({
@@ -27,6 +29,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <Navigation />
         {children}
       </body>
     </html>
