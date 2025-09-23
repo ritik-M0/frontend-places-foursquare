@@ -48,6 +48,28 @@ export default function Navigation() {
             >
               🏠 Real Estate Agent
             </Link>
+
+            <Link
+              href="/energy-agent"
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isActive("/energy-agent")
+                  ? "bg-slate-700 text-white"
+                  : "text-slate-300 hover:text-white hover:bg-slate-700"
+              }`}
+            >
+              ⚡ Energy Agent
+            </Link>
+
+            <Link
+              href="/supply-chain-agent"
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isActive("/supply-chain-agent")
+                  ? "bg-slate-700 text-white"
+                  : "text-slate-300 hover:text-white hover:bg-slate-700"
+              }`}
+            >
+              🚛 Supply Chain Agent
+            </Link>
           </div>
         </div>
 

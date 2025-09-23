@@ -21,7 +21,16 @@ interface Place {
     address: string;
     category: string;
     relevance?: number;
-    businessType?: "recommendation" | "competitor";
+    businessType?:
+      | "recommendation"
+      | "competitor"
+      | "infrastructure"
+      | "renewable"
+      | "facility"
+      | "warehouse"
+      | "distribution"
+      | "transportation"
+      | "logistics";
     neighborhood?: string;
     footTraffic?: string;
     rawFootTraffic?: {
@@ -57,6 +66,37 @@ interface Place {
     crime_rate?: string;
     appreciation_rate?: number;
     rental_yield?: number;
+    // Enhanced energy-specific properties
+    facility_type?: string;
+    energy_capacity?: string;
+    grid_connection?: string;
+    renewable_type?: string;
+    efficiency_rating?: string;
+    maintenance_status?: string;
+    power_output?: string;
+    service_area?: string;
+    installation_year?: number;
+    environmental_impact?: string;
+    grid_stability?: string;
+    backup_systems?: string;
+    energy_storage?: string;
+    transmission_voltage?: string;
+    // Enhanced supply chain-specific properties
+    storage_capacity?: string;
+    transportation_access?: string;
+    rail_access?: boolean;
+    highway_access?: boolean;
+    port_proximity?: string;
+    loading_docks?: number;
+    automation_level?: string;
+    warehouse_size?: string;
+    distribution_range?: string;
+    operating_hours?: string;
+    last_mile_capability?: boolean;
+    cold_storage?: boolean;
+    hazmat_certified?: boolean;
+    cross_docking?: boolean;
+    inventory_turnover?: string;
   };
 }
 
@@ -70,7 +110,12 @@ interface MapData {
     userLocation?: unknown;
   };
   metadata?: {
-    analysisType: "business_location" | "general_search" | "real_estate";
+    analysisType:
+      | "business_location"
+      | "general_search"
+      | "real_estate"
+      | "energy"
+      | "supply_chain";
     neighborhoods?: Array<{
       name: string;
       description: string;
@@ -88,11 +133,27 @@ function CustomMarker({
   businessType = "competitor",
   analysisType,
 }: {
-  businessType?: "recommendation" | "competitor";
-  analysisType?: "business_location" | "general_search" | "real_estate";
+  businessType?:
+    | "recommendation"
+    | "competitor"
+    | "infrastructure"
+    | "renewable"
+    | "facility"
+    | "warehouse"
+    | "distribution"
+    | "transportation"
+    | "logistics";
+  analysisType?:
+    | "business_location"
+    | "general_search"
+    | "real_estate"
+    | "energy"
+    | "supply_chain";
 }) {
   const isRecommendation = businessType === "recommendation";
   const isRealEstate = analysisType === "real_estate";
+  const isEnergy = analysisType === "energy";
+  const isSupplyChain = analysisType === "supply_chain";
 
   return (
     <div
@@ -125,14 +186,42 @@ function CustomMarker({
           left: "0",
           width: "22px",
           height: "22px",
-          background: isRealEstate
+          background: isSupplyChain
+            ? businessType === "warehouse"
+              ? "linear-gradient(135deg, #8b5cf6, #7c3aed)" // Purple for warehouses
+              : businessType === "distribution"
+              ? "linear-gradient(135deg, #06b6d4, #0891b2)" // Cyan for distribution
+              : businessType === "transportation"
+              ? "linear-gradient(135deg, #f59e0b, #d97706)" // Orange for transportation
+              : "linear-gradient(135deg, #ef4444, #dc2626)" // Red for logistics
+            : isEnergy
+            ? businessType === "renewable"
+              ? "linear-gradient(135deg, #22c55e, #16a34a)" // Green for renewable
+              : businessType === "infrastructure"
+              ? "linear-gradient(135deg, #eab308, #ca8a04)" // Yellow for infrastructure
+              : "linear-gradient(135deg, #3b82f6, #1d4ed8)" // Blue for facilities
+            : isRealEstate
             ? "linear-gradient(135deg, #3b82f6, #1d4ed8)" // Blue for real estate
             : isRecommendation
             ? "linear-gradient(135deg, #22c55e, #16a34a)" // Green for recommendations
             : "linear-gradient(135deg, #f59e0b, #d97706)", // Orange for competitors
           border: "2px solid white",
           borderRadius: "50%",
-          boxShadow: isRealEstate
+          boxShadow: isSupplyChain
+            ? businessType === "warehouse"
+              ? "0 3px 8px rgba(139, 92, 246, 0.4)" // Purple shadow
+              : businessType === "distribution"
+              ? "0 3px 8px rgba(6, 182, 212, 0.4)" // Cyan shadow
+              : businessType === "transportation"
+              ? "0 3px 8px rgba(245, 158, 11, 0.4)" // Orange shadow
+              : "0 3px 8px rgba(239, 68, 68, 0.4)" // Red shadow
+            : isEnergy
+            ? businessType === "renewable"
+              ? "0 3px 8px rgba(34, 197, 94, 0.4)"
+              : businessType === "infrastructure"
+              ? "0 3px 8px rgba(234, 179, 8, 0.4)"
+              : "0 3px 8px rgba(59, 130, 246, 0.4)"
+            : isRealEstate
             ? "0 3px 8px rgba(59, 130, 246, 0.4)"
             : isRecommendation
             ? "0 3px 8px rgba(34, 197, 94, 0.4)"
@@ -142,7 +231,41 @@ function CustomMarker({
           justifyContent: "center",
         }}
       >
-        {isRealEstate ? (
+        {isSupplyChain ? (
+          // Supply chain icons based on business type
+          businessType === "warehouse" ? (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+              <path d="M3 21h18v-2H3v2zm2-8h2v-2H5v2zm4 0h2v-2H9v2zm4 0h2v-2h-2v2zm4 0h2v-2h-2v2zM5 9h2V7H5v2zm4 0h2V7H9v2zm4 0h2V7h-2v2zm4 0h2V7h-2v2zM12 3L2 9v2h20V9l-10-6z" />
+            </svg>
+          ) : businessType === "distribution" ? (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+              <path d="M19 7h-3V6a4 4 0 0 0-8 0v1H5a1 1 0 0 0-1 1v11a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V8a1 1 0 0 0-1-1zM10 6a2 2 0 0 1 4 0v1h-4V6zm8 13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V9h2v1a1 1 0 0 0 2 0V9h4v1a1 1 0 0 0 2 0V9h2v10z" />
+            </svg>
+          ) : businessType === "transportation" ? (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+              <path d="M18 18.5a1.5 1.5 0 0 1-3 0V17h3v1.5zM19.5 9.5h-1V8h-15v1.5h-1c-.8 0-1.5.7-1.5 1.5v7c0 .6.4 1 1 1h.5v1.5a1.5 1.5 0 0 0 3 0V19h11v1.5a1.5 1.5 0 0 0 3 0V19h.5c.6 0 1-.4 1-1v-7c0-.8-.7-1.5-1.5-1.5zM6 18.5a1.5 1.5 0 0 1-3 0V17h3v1.5z" />
+            </svg>
+          ) : (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+              <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+            </svg>
+          )
+        ) : isEnergy ? (
+          // Energy icons based on facility type
+          businessType === "renewable" ? (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+              <path d="M17,8C8,10 5.9,16.17 3.82,21.34L5.71,22L6.66,19.7C7.14,19.87 7.64,20 8,20C19,20 22,3 22,3C21,5 14,5.25 9,6.25C4,7.25 2,11.5 2,13.5C2,15.5 3.75,17.25 3.75,17.25C7,8 17,8 17,8Z" />
+            </svg>
+          ) : businessType === "infrastructure" ? (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+              <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+            </svg>
+          ) : (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+            </svg>
+          )
+        ) : isRealEstate ? (
           // House icon for real estate
           <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />

@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Retail & Real Estate Intelligence Platform",
+  title: "Comprehensive Intelligence Platform",
   description:
-    "AI-powered location intelligence for retail and real estate professionals",
+    "AI-powered location intelligence for retail, real estate, energy, and supply chain professionals",
 };
 
 export default function RootLayout({
