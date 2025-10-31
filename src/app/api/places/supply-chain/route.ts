@@ -600,7 +600,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify(requestPayload),
       // Add timeout and connection settings
-      signal: AbortSignal.timeout(240000), // 60 second timeout
+      signal: AbortSignal.timeout(840000), // 840 second timeout
     });
 
     if (!backendResponse.ok) {
