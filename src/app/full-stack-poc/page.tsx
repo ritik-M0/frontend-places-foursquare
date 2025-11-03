@@ -1,77 +1,31 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import dynamic from "next/dynamic";
-
-// Dynamically import MapboxMapView (no SSR needed for Mapbox)
-const MapboxMapView = dynamic(() => import("@/components/MapboxMapView"), {
-  ssr: false,
-  loading: () => (
-    <div className="h-full w-full bg-gray-100 flex items-center justify-center">
-      <div className="text-gray-500">Loading map...</div>
-    </div>
-  ),
-});
-
-interface MapData {
-  center: { lat: number; lng: number };
-  bounds?: { north: number; south: number; east: number; west: number };
-  layers: {
-    places: Array<{
-      id: string;
-      type: string;
-      coordinates: [number, number];
-      properties: {
-        name: string;
-        address: string;
-        category: string;
-        relevance: number;
-        businessType?: "recommendation" | "competitor";
-        neighborhood?: string;
-        // Enhanced real estate-specific properties
-        property_type?: string;
-        price_range?: string;
-        investment_potential?: number;
-        market_trend?: string;
-        roi_estimate?: string;
-        cap_rate?: number;
-        property_size?: string;
-        zoning?: string;
-        walkability_score?: number;
-        transit_access?: string;
-        school_district?: string;
-        crime_rate?: string;
-        appreciation_rate?: number;
-        rental_yield?: number;
-      };
-    }>;
-    events: unknown[];
-    weather: unknown[];
-    userLocation: Record<string, unknown>;
-  };
-  metadata?: {
-    analysisType: "business_location" | "general_search" | "real_estate";
-    neighborhoods?: Array<{
-      name: string;
-      description: string;
-      competitors: number;
-    }>;
-  };
-}
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
+interface DetectedService {
+  url: string;
+  type: string;
+  description: string;
+  timestamp: Date;
+}
+
 export default function FullStackPOCPage() {
-  const [mapData, setMapData] = useState<MapData | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [projectId, setProjectId] = useState("khfkjfbjbhwiejihn");
   const [userId, setUserId] = useState("meta-user-1");
   const [showSettings, setShowSettings] = useState(false);
+  const [detectedServices, setDetectedServices] = useState<DetectedService[]>(
+    []
+  );
+  const [activePreviewUrl, setActivePreviewUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -81,20 +35,6 @@ export default function FullStackPOCPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const handleMapData = (data: MapData | undefined) => {
-    if (data) {
-      // Set analysis type for full stack POC
-      const enhancedData = {
-        ...data,
-        metadata: {
-          ...data.metadata,
-          analysisType: "general_search" as const,
-        },
-      };
-      setMapData(enhancedData);
-    }
-  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
@@ -131,6 +71,7 @@ export default function FullStackPOCPage() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let assistantMessage = "";
+      let currentEvent = "";
 
       if (reader) {
         // Add initial empty assistant message
@@ -145,9 +86,8 @@ export default function FullStackPOCPage() {
 
           for (const line of lines) {
             if (line.startsWith("event:")) {
-              const eventType = line.replace("event:", "").trim();
-              // You can handle different event types here if needed
-              console.log("Event:", eventType);
+              currentEvent = line.replace("event:", "").trim();
+              console.log("Event:", currentEvent);
             } else if (line.startsWith("data:")) {
               try {
                 const jsonData = JSON.parse(line.replace("data:", "").trim());
@@ -165,8 +105,66 @@ export default function FullStackPOCPage() {
                     }
                     return newMessages;
                   });
+
+                  // Check for E2B URLs in the token
+                  const urlRegex =
+                    /https?:\/\/\d+-[a-z0-9]+\.e2b\.app[^\s)]*/gi;
+                  const foundUrls = jsonData.token.match(urlRegex);
+                  if (foundUrls) {
+                    foundUrls.forEach((url: string) => {
+                      setDetectedServices((prev) => {
+                        // Avoid duplicates
+                        if (!prev.find((s) => s.url === url)) {
+                          const newService: DetectedService = {
+                            url: url,
+                            type: "e2b_service",
+                            description: "E2B Sandbox Service",
+                            timestamp: new Date(),
+                          };
+                          // Auto-set as active preview if first one
+                          if (prev.length === 0) {
+                            setActivePreviewUrl(url);
+                            setShowPreview(true);
+                          }
+                          return [...prev, newService];
+                        }
+                        return prev;
+                      });
+                    });
+                  }
                 }
-              } catch (e) {
+
+                // Handle tool_complete events for service URLs
+                if (
+                  currentEvent === "tool_complete" &&
+                  jsonData.tool_name === "get_service_url"
+                ) {
+                  const urlRegex =
+                    /https?:\/\/\d+-[a-z0-9]+\.e2b\.app[^\s)]*/gi;
+                  const output = jsonData.output_preview || "";
+                  const foundUrls = output.match(urlRegex);
+                  if (foundUrls) {
+                    foundUrls.forEach((url: string) => {
+                      setDetectedServices((prev) => {
+                        if (!prev.find((s) => s.url === url)) {
+                          const newService: DetectedService = {
+                            url: url,
+                            type: "service_url",
+                            description: "Running Service",
+                            timestamp: new Date(),
+                          };
+                          if (prev.length === 0) {
+                            setActivePreviewUrl(url);
+                            setShowPreview(true);
+                          }
+                          return [...prev, newService];
+                        }
+                        return prev;
+                      });
+                    });
+                  }
+                }
+              } catch {
                 // Skip invalid JSON
                 console.log("Non-JSON data:", line);
               }
@@ -411,9 +409,186 @@ export default function FullStackPOCPage() {
         </div>
       </div>
 
-      {/* Right Side - Map */}
-      <div className="w-1/2 bg-white border-l border-gray-200">
-        <MapboxMapView mapData={mapData} />
+      {/* Right Side - Preview Panel */}
+      <div className="w-1/2 bg-slate-950 border-l border-slate-700 flex flex-col">
+        {/* Preview Header */}
+        <div className="p-4 border-b border-slate-700 bg-slate-900">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">E2B Preview</h2>
+              <p className="text-xs text-gray-400 mt-1">
+                {detectedServices.length > 0
+                  ? `${detectedServices.length} service${
+                      detectedServices.length > 1 ? "s" : ""
+                    } detected`
+                  : "No services detected yet"}
+              </p>
+            </div>
+            {detectedServices.length > 0 && (
+              <button
+                onClick={() => setShowPreview(!showPreview)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+              >
+                {showPreview ? "Hide Preview" : "Show Preview"}
+              </button>
+            )}
+          </div>
+
+          {/* Service Tabs */}
+          {detectedServices.length > 0 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto">
+              {detectedServices.map((service, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setActivePreviewUrl(service.url);
+                    setShowPreview(true);
+                  }}
+                  className={`flex-shrink-0 px-3 py-2 rounded text-xs font-medium transition-colors ${
+                    activePreviewUrl === service.url
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-800 text-gray-300 hover:bg-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                    <span>Service {index + 1}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Preview Content */}
+        <div className="flex-1 relative bg-slate-950">
+          {detectedServices.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center max-w-md px-6">
+                <svg
+                  className="w-20 h-20 mx-auto mb-4 text-slate-700"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                  No Preview Available
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Send a message to create a service. When the agent starts a
+                  server or service, it will appear here for preview.
+                </p>
+                <div className="mt-4 p-3 bg-slate-900 rounded-lg border border-slate-800">
+                  <p className="text-xs text-gray-400 text-left">
+                    <span className="font-semibold text-gray-300">
+                      Try asking:
+                    </span>
+                    <br />
+                    • &quot;Create a FastAPI server&quot;
+                    <br />
+                    • &quot;Build a simple React app&quot;
+                    <br />• &quot;Make a Node.js Express API&quot;
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : showPreview && activePreviewUrl ? (
+            <div className="h-full flex flex-col">
+              {/* Preview Toolbar */}
+              <div className="bg-slate-900 border-b border-slate-700 px-4 py-2 flex items-center gap-3">
+                <div className="flex-1 flex items-center gap-2 bg-slate-800 rounded px-3 py-1.5">
+                  <svg
+                    className="w-4 h-4 text-gray-400 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    value={activePreviewUrl}
+                    readOnly
+                    className="flex-1 bg-transparent text-xs text-gray-300 outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(activePreviewUrl);
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs rounded transition-colors"
+                  title="Copy URL"
+                >
+                  Copy
+                </button>
+                <a
+                  href={activePreviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                >
+                  Open in New Tab
+                </a>
+              </div>
+
+              {/* iframe Preview */}
+              <div className="flex-1 relative bg-white">
+                <iframe
+                  src={activePreviewUrl}
+                  className="w-full h-full border-0"
+                  title="E2B Service Preview"
+                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <p className="text-gray-400">Preview hidden</p>
+                <button
+                  onClick={() => setShowPreview(true)}
+                  className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+                >
+                  Show Preview
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Service Details Footer */}
+        {detectedServices.length > 0 && activePreviewUrl && (
+          <div className="p-3 border-t border-slate-700 bg-slate-900">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-gray-400">
+                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                <span>Service Running</span>
+              </div>
+              <div className="text-gray-500">
+                {detectedServices.find((s) => s.url === activePreviewUrl)
+                  ?.timestamp
+                  ? new Date(
+                      detectedServices.find(
+                        (s) => s.url === activePreviewUrl
+                      )!.timestamp
+                    ).toLocaleTimeString()
+                  : ""}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
